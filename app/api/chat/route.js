@@ -4,6 +4,18 @@ import { buildSystemPrompt } from "../../../lib/prompt";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+// Widgets get embedded on client websites (a different domain than this
+// app), so the browser needs explicit permission to call this API from there.
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
+
 export async function POST(req) {
   try {
     const { businessId, message, history = [], visitor = {} } = await req.json();
@@ -11,7 +23,7 @@ export async function POST(req) {
     if (!businessId || !message) {
       return Response.json(
         { error: "businessId and message are required" },
-        { status: 400 }
+        { status: 400, headers: CORS_HEADERS }
       );
     }
 
@@ -24,7 +36,7 @@ export async function POST(req) {
       .single();
 
     if (bizError || !business) {
-      return Response.json({ error: "Business not found" }, { status: 404 });
+      return Response.json({ error: "Business not found" }, { status: 404, headers: CORS_HEADERS });
     }
 
     const systemPrompt = buildSystemPrompt(business);
@@ -46,7 +58,6 @@ export async function POST(req) {
       .map((block) => block.text)
       .join("\n");
 
-    // Log the exchange so the owner dashboard has something to show.
     await supabase.from("conversations").insert({
       business_id: businessId,
       visitor_name: visitor.name || null,
@@ -55,9 +66,9 @@ export async function POST(req) {
       bot_reply: replyText,
     });
 
-    return Response.json({ reply: replyText });
+    return Response.json({ reply: replyText }, { headers: CORS_HEADERS });
   } catch (err) {
     console.error("Chat route error:", err);
-    return Response.json({ error: "Something went wrong" }, { status: 500 });
+    return Response.json({ error: "Something went wrong" }, { status: 500, headers: CORS_HEADERS });
   }
 }
